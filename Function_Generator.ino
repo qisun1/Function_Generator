@@ -30,11 +30,13 @@
 
 uint32_t frq;
 uint16_t amplitude;
-bool changedFlag;
+bool changedFlagWave;
+bool changedFlagAmplitue;
 
 int8_t menuCursorPos; //menu :home; 2:WAVE; 3:Frequency; 4:meters
 bool menuChangeValue;
-String waveForm;
+String waveFormString;
+WaveformType waveType;
 
 unsigned long lastButtonPress;
 const uint8_t step = 4;
@@ -73,7 +75,7 @@ void setup()
 	//Start AD9833
 	// This MUST be the first command after declaring the AD9833 object
 	gen.Begin();              // The loaded defaults are 1000 Hz SINE_WAVE using REG0
-	gen.ApplySignal(SINE_WAVE, REG1, 1000);
+	gen.ApplySignal(waveType, REG1, frq);
 	gen.EnableOutput(true);  // Turn ON the output
 
 	Serial.println("start1");
@@ -115,12 +117,13 @@ void init_system()
 {
 	menuChangeValue = false;
 	menuCursorPos = 0;
-	waveForm = "SINE    ";
+	waveFormString = "SINE       ";
+	waveType = SINE_WAVE;
 	frq = 1000;
 	amplitude = 600;
 
 	lcd.setCursor(1, 0);
-	lcd.print(waveForm);
+	lcd.print(waveFormString);
 
 	lcd.setCursor(1, 1);
 
@@ -149,17 +152,24 @@ void buttonPressed()
 {
 	if (menuChangeValue == false)
 	{
-		changedFlag = false;
+		changedFlagWave = false;
+		changedFlagAmplitue = false;
 		menuChangeValue = true;
 		setCursorPos();
 		lcd.print("-");		
 	}
 	else
 	{
-		if (changedFlag == true)
+		if (changedFlagWave == true)
 		{
-			//adjust the system
+			gen.ApplySignal(waveType, REG1, frq);
 		}
+
+		if (changedFlagAmplitue == true)
+		{
+
+		}
+
 		menuChangeValue = false;
 		setCursorPos();
 		lcd.print("*");
@@ -190,27 +200,37 @@ void moveCursor(int8_t moveNext)
 	}
 	else
 	{
-		changedFlag = true;
 		switch (menuCursorPos) 
 		{
 			case 0:	
-				if (waveForm == "SINE    ")
+				//change wave form
+				changedFlagWave = true;
+				if (waveType == SINE_WAVE)
 				{
-					waveForm =  "SQUARE  ";
+					waveFormString =  "SQUARE     ";
+					waveType = SQUARE_WAVE;
 				}
-				else if (waveForm == "SQUARE  ")
+				else if (waveType == SQUARE_WAVE)
 				{
-					waveForm = "TRIANGLE";
+					waveFormString = "HALF SQUARE" ;
+					waveType = HALF_SQUARE_WAVE;
 				}
-				else if (waveForm == "TRIANGLE")
+				else if (waveType == HALF_SQUARE_WAVE)
 				{
-					waveForm = "SINE    ";
+					waveFormString = "TRIANGLE   ";
+					waveType = TRIANGLE_WAVE;
+				}
+				else if (waveType == TRIANGLE_WAVE)
+				{
+					waveFormString = "SINE       ";
+					waveType = SINE_WAVE;
 				}
 				lcd.setCursor(1, 0);
-				lcd.print(waveForm);
+				lcd.print(waveFormString);
 				break;
 			case 1:
 				//change frequency value
+				changedFlagWave = true;
 				if (moveNext > 0)
 				{
 					if (frq <= 900)
@@ -252,6 +272,7 @@ void moveCursor(int8_t moveNext)
 				break;
 			case 2:
 				//change amplitude value
+				changedFlagAmplitue = true;
 				if ((moveNext > 0) && (amplitude<1200))
 				{
 					amplitude += 10;

@@ -15,21 +15,21 @@
 #include <Fast.h> //* GitMoDu https://github.com/GitMoDu/Fast
 
 
-#define FNC_PIN  10
+#define FNC_PIN  7
 #define LCD_brightness 5
 
 // pins for rotary encoder
-#define rotaryPin1 4 
-#define rotaryPin2 3
-#define buttonPin 2
+#define rotaryPin1 3 
+#define rotaryPin2 2
+#define buttonPin 4
 
 //pins for digital pot x9c103 (10k) for LM317T voltage regulator
-#define X9_CS_PIN A0
+#define X9_CS_PIN A2
 #define X9_UD_PIN A1
-#define X9_INC_PIN A2
+#define X9_INC_PIN A0
 
 uint32_t frq;
-uint16_t amplitude;
+uint8_t amplitude;
 bool changedFlagWave;
 bool changedFlagAmplitue;
 
@@ -40,18 +40,24 @@ WaveformType waveType;
 
 unsigned long lastButtonPress;
 const uint8_t step = 4;
-
+//buffer for format string
+char buffer[8];
 
 LiquidCrystal_I2C lcd(0x27, 16, 2);  // set the LCD address to 0x27 for a 20 chars and 4 line display
 AD9833 gen(FNC_PIN);
 Encoder myEnc(rotaryPin1, rotaryPin2);
-FastX9C103 PotAmplitue;
+FastX9C102 PotAmplitue;
+
+//pot setting to amplitude mv
+//formula: amplitude = PotSetting *6.9-15.9
+const float coeff = 6.9;
+const float intercept = -15.9;
 
 void setup()
 {
 	Serial.begin(9600);
 	delay(10);
-
+	Serial.println("initialize");
 	//Start LCD Display	
 	lcd.setBacklight((uint8_t)1);
 	lcd.init();
@@ -61,12 +67,12 @@ void setup()
 	//Initialize values and menu
 	init_system();
 
-	// initialize pot
+	//// initialize pot
 	PotAmplitue.Setup(X9_CS_PIN, X9_UD_PIN, X9_INC_PIN);
-	PotAmplitue.JumpToStep(90);
+	PotAmplitue.JumpToStep(amplitude);
 
 
-	//set encoder
+	////set encoder
 	pinMode(buttonPin, INPUT_PULLUP);
 	pinMode(rotaryPin1, INPUT_PULLUP);
 	pinMode(rotaryPin2, INPUT_PULLUP);
@@ -74,11 +80,14 @@ void setup()
 
 	//Start AD9833
 	// This MUST be the first command after declaring the AD9833 object
+	waveType = SINE_WAVE;
+	frq = 1000;
 	gen.Begin();              // The loaded defaults are 1000 Hz SINE_WAVE using REG0
 	gen.ApplySignal(waveType, REG1, frq);
 	gen.EnableOutput(true);  // Turn ON the output
-
-	Serial.println("start1");
+	delay(10);
+	Serial.println("ok now");
+	Serial.println("ok start");
 }
 
 // Add the main program code into the continuous loop() function
@@ -110,6 +119,7 @@ void loop()
 			buttonPressed();
 		}
 	}
+	//Serial.println("loop");
 	delay(1);
 }
 
@@ -120,29 +130,15 @@ void init_system()
 	waveFormString = "SINE       ";
 	waveType = SINE_WAVE;
 	frq = 1000;
-	amplitude = 600;
+	amplitude = 50;
 
 	lcd.setCursor(1, 0);
 	lcd.print(waveFormString);
 
 	lcd.setCursor(1, 1);
 
-	char buffer[8];
-	if (frq >= 1000)
-	{
-		
-		snprintf(buffer, 8, "%3d KHz", int(frq/1000));
-	}
-	else
-	{
-		snprintf(buffer, 8, "%3d Hz ", frq);
-	}
-	lcd.setCursor(1, 1);
-	lcd.print(buffer);
-
-	snprintf(buffer, 8, "%4d mV", amplitude);
-	lcd.setCursor(9, 1);
-	lcd.print(buffer);
+	printfrq();
+	printamplitude();
 
 	lcd.setCursor(0, 0);
 	lcd.print("*");
@@ -269,18 +265,22 @@ void moveCursor(int8_t moveNext)
 						frq -= 100000;
 					}
 				}
+				printfrq();
 				break;
 			case 2:
 				//change amplitude value
 				changedFlagAmplitue = true;
-				if ((moveNext > 0) && (amplitude<1200))
+				if ((moveNext > 0) && (amplitude<99))
 				{
-					amplitude += 10;
+					amplitude += 1;
+					PotAmplitue.Up();
 				}
-				else if ((moveNext < 0) && (amplitude > 10))
+				else if ((moveNext < 0) && (amplitude > 4))
 				{
-					amplitude -= 10;
+					amplitude -= 1;
+					PotAmplitue.Down();
 				}
+				printamplitude();
 				break;
 		}
 	}
@@ -300,4 +300,27 @@ void setCursorPos()
 			lcd.setCursor(8, 1);
 			break;
 	}
+}
+
+void printfrq()
+{
+	if (frq >= 1000)
+	{
+
+		snprintf(buffer, 8, "%3d KHz", int(frq / 1000));
+	}
+	else
+	{
+		snprintf(buffer, 8, "%3d Hz ", frq);
+	}
+	lcd.setCursor(1, 1);
+	lcd.print(buffer);
+}
+
+void printamplitude()
+{
+	int display = int(coeff * amplitude + intercept);
+	snprintf(buffer, 8, "%4d mV", display);
+	lcd.setCursor(9, 1);
+	lcd.print(buffer);
 }
